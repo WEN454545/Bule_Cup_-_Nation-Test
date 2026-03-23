@@ -1,0 +1,58 @@
+C51 COMPILER V9.56.0.0   BOX_BEE                                                           03/23/2026 17:39:38 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE BOX_BEE
+OBJECT MODULE PLACED IN .\Objects\Box_Bee.obj
+COMPILER INVOKED BY: D:\programme\keil_c51v956\C51\BIN\C51.EXE ..\Driver\Box_Bee.c OPTIMIZE(8,SPEED) BROWSE INCDIR(..\Dr
+                    -iver) DEBUG OBJECTEXTEND PRINT(.\Listings\Box_Bee.lst) TABS(2) OBJECT(.\Objects\Box_Bee.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include "Box_Bee.h"
+   3          #include "HC138.h"
+   4          
+   5          void Box_On()
+   6          {
+   7   1          P0 = 0x10;
+   8   1          P0 &= ~(0x40);
+   9   1          HC138_Select(5);
+  10   1          
+  11   1      }
+  12          
+  13          void Box_Off()
+  14          {
+  15   1          P0 &= ~(0x10);
+  16   1          P0 &= ~(0x40);
+  17   1          HC138_Select(5);
+  18   1      }
+  19          
+  20          void Bee_On()
+  21          {
+  22   1          P0 |= 0x40;
+  23   1          P0 &= ~(0x10);
+  24   1          HC138_Select(5);
+  25   1      }
+  26          
+  27          void Bee_Off()
+  28          {
+  29   1          P0 &= ~(0x40);
+  30   1          P0 &= ~(0x10);
+  31   1          HC138_Select(5);
+  32   1      }
+  33          
+  34          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     44    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

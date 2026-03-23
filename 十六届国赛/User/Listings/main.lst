@@ -1,0 +1,1461 @@
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\programme\keil_c51v956\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(..\Driver) DEBUG O
+                    -BJECTEXTEND PRINT(.\Listings\main.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include "Initsys.h"
+   3          #include "Key.h"
+   4          #include "Nixie.h"
+   5          #include "Led.h"
+   6          #include "Box_Bee.h"
+   7          #include "HC138.h"
+   8          #include "Wave.h"
+   9          #include "iic.h"
+  10          #include "onewire.h"
+  11          #include "ds1302.h"
+  12          #include "Uart.h"
+  13          #include <stdio.h>
+  14          #include "string.h"
+  15          
+  16          
+  17          /* =====================================================================================================*/
+  18          //变量声明区
+  19          unsigned char pdata i = 0;        //循环变量
+  20          unsigned char pdata Key_Value,Key_Down,Key_Up,Key_Old;        //按键变量
+  21          unsigned char pdata Key_Slow_Down = 0;        //按键延时
+  22          unsigned char xdata Nixie_Show[8] = {10,10,10,10,10,10,10,10};       //数码管显示变量
+  23          unsigned char xdata Nixie_Point[8] = {0,0,0,0,0,0,0,0};        //数码管小数点变量
+  24          unsigned char Nixie_Led_Pos = 0;        //显示轮询
+  25          unsigned int Nixie_Slow_Down = 0;        //数码管显示延时
+  26          unsigned char xdata Led_Enable[8] = {0,0,0,0,0,0,0,0};        //led使能变量
+  27          unsigned int pdata NE555_1000MS = 0;          //NE555 1S频率计时
+  28          
+  29          unsigned char pdata Nixie_Show_Mode = 0;        //数码管显示模式—— 0：数据 1：参数 2：标定
+  30          unsigned char pdata Nixie_Show_viceMode = 0;        //数码管次屏显示—— 0~7
+  31          float pdata Tem_Read = 0;        //温度读取变量
+  32          //unsigned int xdata Water_Lenth = 0;        //水位长度       cm
+  33          unsigned int xdata Volumn = 0;        //体积       m?
+  34          unsigned char Remain_Volumn = 0;        //剩余体积比       
+  35          unsigned int Weight = 0;        //重量       t
+  36          unsigned int xdata Volt_Weight_Show[5] = {0,10,20,40,50};        //电压模拟重量       V*10
+  37          unsigned int xdata Volt_Weight_Set[5] = {0,10,20,40,50};        //电压模拟重量设置       V*10
+  38          
+  39          
+  40          unsigned int  freq = 0;          //NE555 频率
+  41          unsigned int  freq_old = 0;          //NE555 频率旧值
+  42          unsigned char pdata Uart_Recv[20] = {0};        //串口接收变量
+  43          unsigned char pdata Uart_Rx_Index = 0;        //串口接收索引
+  44          // unsigned int Uart_Slow_Down = 0;        //串口接收延时
+  45          unsigned char Uart_Rx_Time = 0;         //串口读取时间
+  46          bit Uart_Rx = 0;                        //单次读标记
+  47          
+  48          unsigned int pdata H_Set[2] ={100,10};         //液位限度—— 0：高水位，1：低水位
+  49          unsigned int pdata F_Set = 2000;         //频率参数
+  50          unsigned int xdata S_Type = 2;        //容器类型—— 0：球体，1：圆柱体，2：长方体
+  51          unsigned int xdata R_Set = 100;         //半径参数  
+  52          unsigned int pdata L_W_H_Set[3] ={100,100,100};         //长、宽、高参数
+  53          
+  54          unsigned int pdata Wave_Lenth = 0;        //超声波测出长度       cm
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 2   
+
+  55          xdata unsigned int Water_d = 0;        //水位实际高度       cm
+  56          
+  57          unsigned char pdata Uart_Id[10] = {0} ;        //串口ID
+  58          unsigned char pdata id_value[10] = {0};               //数值
+  59          unsigned char xdata error = 0;                //错误标记
+  60          unsigned char xdata ok = 0;                   //正常标记
+  61          unsigned char pdata temp_Set[2] = {0};
+  62          unsigned char pdata Error_Index = 0;                //错误变量          0_正常 1_水位超出范围 2_水位低于范
+             -围  3_频率超出规定    4_频率变化连续   5_频率变化过大
+  63          bit Error_Flag = 0;                //错误标志  
+  64          bit Freq_Flag = 0;                //频率标志    0_连续下降  1_连续上升
+  65          bit Freq_Flag_Old = 0;                //频率标志旧值
+  66          bit Freq_Big_Change = 0;                //频率变化剧烈标志
+  67          
+  68           bit Error_1 = 0;   //500
+  69           bit Error_2 = 0;   //501
+  70           bit Error_3 = 0;   //502
+  71           bit Error_4 = 0;   //503
+  72           bit Error_5 = 0;   //504
+  73          
+  74          unsigned int weight_result = 0;
+  75          
+  76          unsigned char pdata Timer_Show[3] = {23,59,50};        //时间设置
+  77          unsigned char Freq_5T = 0;        //5次连续上升变化
+  78          unsigned char Freq_5D = 0;        //5次连续下降变化
+  79          unsigned char Time_100Ms = 0;     //100ms延时
+  80          unsigned char Time_200Ms = 0;     //200ms延时 
+  81          unsigned int Time_3S = 0;         //3S延时
+  82          bit Fight_Led_7 = 0;              //led7的闪烁标志
+  83          bit Led_8_Start_Index = 0;        //led8开始标志
+  84          bit Fight_Led_8 = 0;              //led8的闪烁标志
+  85          
+  86          unsigned char Trend_Error_Flag = 0;     // 趋势异常标志
+  87          unsigned char Trend_Error_Count = 0;     // 趋势异常计数器
+  88          unsigned char Trend_Error_Reported = 0;  // 趋势异常已上报标志
+  89          
+  90          unsigned int freq_diff =0;          //频率不同      
+  91          /* =====================================================================================================*/
+  92          //函数声明区
+  93          
+  94          void Error_Report()
+  95          {
+  96   1          // 趋势异常检测
+  97   1          if (((freq - freq_old) > 60000) || (freq - freq_old < -60000)) {
+  98   2              // 计算实际频率差（考虑溢出）
+  99   2              unsigned int freq_diff = ((freq - freq_old) > 60000) ? freq_old - freq : freq - freq_old;
+ 100   2              
+ 101   2              // 趋势异常持续检测
+ 102   2              if (freq_diff > 1000) {  // 假设阈值为1000
+ 103   3                  Trend_Error_Count++;
+ 104   3                  if (Trend_Error_Count >= 3 && !Trend_Error_Reported) {  // 连续3次检测到异常
+ 105   4                      Trend_Error_Flag = 1;
+ 106   4                      Error_Index = 5;  // 趋势异常
+ 107   4                      Trend_Error_Reported = 1;  // 标记为已上报
+ 108   4                  }
+ 109   3              } else {
+ 110   3                  // 趋势恢复正常
+ 111   3                  Trend_Error_Count = 0;
+ 112   3                  Trend_Error_Reported = 0;
+ 113   3              }
+ 114   2          } else {
+ 115   2              // 趋势恢复正常
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 3   
+
+ 116   2              Trend_Error_Count = 0;
+ 117   2              Trend_Error_Reported = 0;
+ 118   2          }
+ 119   1      
+ 120   1          // 现有异常上报逻辑
+ 121   1          if(Error_Flag == 0) 
+ 122   1          { 
+ 123   2              switch (Error_Index) 
+ 124   2              { 
+ 125   3              case 1:     // 500 
+ 126   3                  printf("[500,%bu%bu%bu,%u.%u%u]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Water_d / 100 %
+             - 10,Water_d / 10 % 10,Water_d % 10 ); 
+ 127   3                  break; 
+ 128   3              
+ 129   3              case 2:     // 501 
+ 130   3                  printf("[501,%bu%bu%bu,%u.%u%u]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Water_d / 100 %
+             - 10,Water_d / 10 % 10,Water_d % 10 ); 
+ 131   3                  break; 
+ 132   3              case 3:     // 502 
+ 133   3                  printf("[503,%bu%bu%bu,%u]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Water_d / 100 % 10,f
+             -req ); 
+ 134   3                  break; 
+ 135   3              case 4:     // 504   
+ 136   3                  printf("[504,%bu%bu%bu,%bu]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Water_d / 100 % 10,
+             -Freq_Flag ); 
+ 137   3                  break; 
+ 138   3              case 5:     // 505 - 趋势异常
+ 139   3                  printf("[505,%bu%bu%bu,%bu]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Water_d / 100 % 10,
+             -((freq - freq_old) > 60000) ? freq_old- freq : freq - freq_old ); 
+ 140   3                  break; 
+ 141   3              } 
+ 142   2              Error_Flag = 1; 
+ 143   2          } 
+ 144   1          else if( Error_Index == 0) 
+ 145   1          { 
+ 146   2              Error_Flag = 0;         //不再发送错误信息 
+ 147   2              // 重置趋势异常标志
+ 148   2              Trend_Error_Flag = 0;
+ 149   2              Trend_Error_Reported = 0;
+ 150   2          }
+ 151   1      }
+ 152          
+ 153          //获取串口ID和数值
+ 154          unsigned char Uart_Get_IdAndValue(unsigned char pos,unsigned char *Uart_Id,unsigned char *id_value);
+ 155          void Volumn_Calc(unsigned int Water_Lenth,unsigned int R_Set,unsigned int *L_W_H_Set,unsigned int S_Type,u
+             -nsigned int *Volumn,unsigned char *Remain_Volumn,unsigned int *Water_d);
+ 156          
+ 157          void Nixie_Clear()
+ 158          {
+ 159   1          unsigned char Nixie_i = 0;
+ 160   1          for ( Nixie_i = 0; Nixie_i < 8; Nixie_i++)
+ 161   1          {
+ 162   2              Nixie_Show[Nixie_i] = 10;
+ 163   2              Nixie_Point[Nixie_i] = 0;
+ 164   2          }
+ 165   1      }
+ 166          
+ 167          
+ 168          //将字符串转换为整数（单位：厘米）
+ 169          unsigned int FloatToInt_cm(unsigned char *id_value,unsigned char *error) 
+ 170          {
+ 171   1          unsigned int temp1 = 0;
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 4   
+
+ 172   1          for(i = 0;i<strlen(id_value);i++)
+ 173   1          {
+ 174   2              if(id_value[i] == '.') continue;
+ 175   2              if(id_value[i] < '0' || id_value[i] > '9')
+ 176   2              {
+ 177   3                  *error = 1; 
+ 178   3                  return 0xff;
+ 179   3              }
+ 180   2              temp1 = temp1 * 10 + (id_value[i] - '0');
+ 181   2          }
+ 182   1          return temp1 * 10;
+ 183   1      }   
+ 184          
+ 185          
+ 186          
+ 187          //解析串口数据
+ 188          void Uart_Solve_temp(unsigned char *Uart_Id,unsigned char *id_value, unsigned char *error, unsigned char *
+             -ok)
+ 189          {
+ 190   1        unsigned int temp2 = 0;
+ 191   1          if(id_value[0] == '?')
+ 192   1          {
+ 193   2              if(strstr(Uart_Id,"H1"))
+ 194   2              {
+ 195   3                  printf("(H1:%u.%u)\r\n",H_Set[0] / 100,H_Set[0] / 10 % 10);
+ 196   3                  *ok = 1;
+ 197   3              }
+ 198   2              else if(strstr(Uart_Id,"H2"))
+ 199   2              {
+ 200   3                  printf("(H2:%u.%u)\r\n",H_Set[1] / 100,H_Set[1] / 10 % 10);
+ 201   3                  *ok = 1;
+ 202   3              }
+ 203   2              else if (strstr(Uart_Id,"F"))
+ 204   2              {
+ 205   3                  printf("(F:%u)\r\n",F_Set);
+ 206   3                  *ok = 1;
+ 207   3              }
+ 208   2              else if(strstr(Uart_Id,"S"))
+ 209   2              {
+ 210   3                  printf("(S:%u)\r\n",S_Type);
+ 211   3                  *ok = 1;
+ 212   3              }
+ 213   2              else if(strstr(Uart_Id,"r"))
+ 214   2              {
+ 215   3                  printf("(r:%u.%u)\r\n",R_Set / 100,R_Set / 10 % 10);
+ 216   3                  *ok = 1;
+ 217   3              }
+ 218   2              else if(strstr(Uart_Id,"L"))
+ 219   2              {
+ 220   3                  printf("(L:%u.%u)\r\n",L_W_H_Set[0] / 100,L_W_H_Set[0] / 10 % 10);
+ 221   3                  *ok = 1;
+ 222   3              }
+ 223   2              else if(strstr(Uart_Id,"W"))
+ 224   2              {
+ 225   3                  printf("(W:%u.%u)\r\n",L_W_H_Set[1] / 100,L_W_H_Set[1] / 10 % 10);
+ 226   3                  *ok = 1;
+ 227   3              }
+ 228   2              else if(strstr(Uart_Id,"H"))
+ 229   2              {
+ 230   3                  printf("(H:%u.%u)\r\n",L_W_H_Set[2] / 100,L_W_H_Set[2] / 10 % 10);
+ 231   3                  *ok = 1;
+ 232   3              }
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 5   
+
+ 233   2              else
+ 234   2              {   //未知符号
+ 235   3                  *error = 1;
+ 236   3              }
+ 237   2      
+ 238   2              return;     //解析完成
+ 239   2          }
+ 240   1      
+ 241   1          //时间设置  （T:HHMMSS）
+ 242   1          if(strstr(Uart_Id,"T"))
+ 243   1          {
+ 244   2              unsigned char h,m,s;        //判断变量
+ 245   2              
+ 246   2              //必须是6位数
+ 247   2              if(
+ 248   2                  id_value[0] < '0' || id_value[0] > '9' || 
+ 249   2                  id_value[1] < '0' || id_value[1] > '9' || 
+ 250   2                  id_value[2] < '0' || id_value[2] > '9' || 
+ 251   2                  id_value[3] < '0' || id_value[3] > '9' || 
+ 252   2                  id_value[4] < '0' || id_value[4] > '9' || 
+ 253   2                  id_value[5] < '0' || id_value[5] > '9' || 
+ 254   2                  id_value[6] != '\0' 
+ 255   2              )
+ 256   2              {
+ 257   3                  *error = 1;
+ 258   3                  return; 
+ 259   3              }
+ 260   2              
+ 261   2              h = (id_value[0] - '0') * 10 + (id_value[1] - '0');
+ 262   2              m = (id_value[2] - '0') * 10 + (id_value[3] - '0');
+ 263   2              s = (id_value[4] - '0') * 10 + (id_value[5] - '0');
+ 264   2      
+ 265   2              //判断是否超出范围
+ 266   2              if(h >= 24 || m >= 60 || s >= 60)
+ 267   2              {
+ 268   3                  *error = 1;
+ 269   3                  return;
+ 270   3              }
+ 271   2              //设置时间  
+ 272   2              Timer_Show[0] = h ;
+ 273   2              Timer_Show[1] = m ;
+ 274   2              Timer_Show[2] = s ;
+ 275   2              Set_Timer(Timer_Show);
+ 276   2              *ok = 1;
+ 277   2              return;
+ 278   2      
+ 279   2          }
+ 280   1          
+ 281   1          //参数设置 
+ 282   1          if(strstr(Uart_Id,"H1"))    
+ 283   1          {
+ 284   2            
+ 285   2              temp2 = FloatToInt_cm(id_value,error);    
+ 286   2              if(temp2 < H_Set[1] )
+ 287   2              {
+ 288   3                 *error = 1;      //上限不可以低于下限
+ 289   3                 return   ;
+ 290   3              }
+ 291   2              else if (temp2 == 0xff)
+ 292   2              {
+ 293   3                  *error = 1;      //参数错误
+ 294   3                 return   ;
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 6   
+
+ 295   3              }
+ 296   2              
+ 297   2              H_Set[0] = temp2;
+ 298   2              *ok = 1;
+ 299   2              return  ;
+ 300   2          }
+ 301   1          else if(strstr(Uart_Id,"H2"))    
+ 302   1          {
+ 303   2              temp2 = FloatToInt_cm(id_value,error);    
+ 304   2              if(temp2 > H_Set[0])
+ 305   2              {
+ 306   3                 *error = 1;      //下限不可以高于上限
+ 307   3                 return   ;
+ 308   3              }
+ 309   2              else if (temp2 == 0xff)
+ 310   2              {
+ 311   3                  *error = 1;      //参数错误
+ 312   3                 return   ;
+ 313   3              }
+ 314   2      
+ 315   2              H_Set[1] = temp2;
+ 316   2              *ok = 1;
+ 317   2              return  ;
+ 318   2          }
+ 319   1          else if(strstr(Uart_Id,"F"))
+ 320   1          {
+ 321   2              temp2 = FloatToInt_cm(id_value,error);  
+ 322   2              if(temp2 == 0xff)   
+ 323   2              {
+ 324   3                  *error = 1;      //参数错误
+ 325   3                  return   ;
+ 326   3              }
+ 327   2              F_Set = temp2 / 10;
+ 328   2              *ok = 1;
+ 329   2          }
+ 330   1          else if(strstr(Uart_Id,"S"))
+ 331   1          {
+ 332   2              temp2 = FloatToInt_cm(id_value,error);  
+ 333   2              temp2 /= 10;            //除以10，得到正确数值
+ 334   2              if(temp2 == 0xff || temp2 > 2)   
+ 335   2              {
+ 336   3                  *error = 1;      //参数错误
+ 337   3                  return   ;
+ 338   3              }
+ 339   2              S_Type = temp2;
+ 340   2              *ok = 1;
+ 341   2          }
+ 342   1          else if(strstr(Uart_Id,"r"))
+ 343   1          {
+ 344   2              temp2 = FloatToInt_cm(id_value,error);  
+ 345   2              if(temp2 == 0xff )   
+ 346   2              {
+ 347   3                  *error = 1;      //参数错误
+ 348   3                  return   ;
+ 349   3              }
+ 350   2              R_Set = temp2;     
+ 351   2              *ok = 1;
+ 352   2          }
+ 353   1          else if(strstr(Uart_Id,"L"))
+ 354   1          {
+ 355   2              temp2 = FloatToInt_cm(id_value,error);  
+ 356   2              if(temp2 == 0xff )   
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 7   
+
+ 357   2              {
+ 358   3                  *error = 1;      //参数错误
+ 359   3                  return   ;
+ 360   3              }
+ 361   2              L_W_H_Set[0] = temp2;
+ 362   2              *ok = 1;
+ 363   2          }
+ 364   1          else if(strstr(Uart_Id,"W"))
+ 365   1          {
+ 366   2              temp2 = FloatToInt_cm(id_value,error);  
+ 367   2              if(temp2 == 0xff )   
+ 368   2              {
+ 369   3                  *error = 1;      //参数错误
+ 370   3                  return   ;
+ 371   3              }
+ 372   2              L_W_H_Set[1] = temp2;
+ 373   2              *ok = 1;
+ 374   2          }
+ 375   1          else if(strstr(Uart_Id,"H"))
+ 376   1          {
+ 377   2              temp2 = FloatToInt_cm(id_value,error);  
+ 378   2              if(temp2 == 0xff )   
+ 379   2              {
+ 380   3                  *error = 1;      //参数错误
+ 381   3                  return   ;
+ 382   3              }
+ 383   2              L_W_H_Set[2] = temp2;
+ 384   2              *ok = 1;
+ 385   2          }
+ 386   1      
+ 387   1      }
+ 388          
+ 389          //超声波解析容器
+ 390          
+ 391          
+ 392          
+ 393          void Key_PutO()         //按键处理
+ 394          {
+ 395   1          if(Key_Slow_Down <= 10) return;
+ 396   1          Key_Slow_Down = 0;
+ 397   1      
+ 398   1          Key_Value = Key_Read();
+ 399   1          Key_Down = Key_Value & (Key_Value ^ Key_Old);
+ 400   1          Key_Up = ~Key_Value & (Key_Value ^ Key_Old);
+ 401   1          Key_Old = Key_Value;
+ 402   1      
+ 403   1          switch (Key_Down)
+ 404   1          {
+ 405   2          case 4:     //显示模式
+ 406   2              if(++Nixie_Show_Mode >= 3)    
+ 407   2              {
+ 408   3                  Nixie_Show_Mode = 0;
+ 409   3              }   
+ 410   2              Nixie_Show_viceMode = 0;
+ 411   2              if(Nixie_Show_Mode == 0)
+ 412   2              {
+ 413   3                  for(i = 0;i<5;i++)
+ 414   3                  {
+ 415   4                      if(i < 4 && i > 0)
+ 416   4                      {
+ 417   5                          if(Volt_Weight_Show[i] < Volt_Weight_Show[i+1]
+ 418   5                              && Volt_Weight_Show[i] > Volt_Weight_Show[i-1])
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 8   
+
+ 419   5                              {
+ 420   6                                  Volt_Weight_Set[i] = Volt_Weight_Show[i];
+ 421   6                              }
+ 422   5                      }
+ 423   4                      else if(i == 4)
+ 424   4                      {
+ 425   5                          if(Volt_Weight_Show[i] <= 50 && Volt_Weight_Show[i] > Volt_Weight_Show[i-1])
+ 426   5                          {
+ 427   6                              Volt_Weight_Set[i] = Volt_Weight_Show[i];
+ 428   6                          }
+ 429   5                      }
+ 430   4                      else if(i == 0)
+ 431   4                      {
+ 432   5                          if(Volt_Weight_Show[i] < Volt_Weight_Show[i+1] && Volt_Weight_Show[i] > 0)
+ 433   5                          {
+ 434   6                              Volt_Weight_Set[i] = Volt_Weight_Show[i];
+ 435   6                          }
+ 436   5                      }
+ 437   4                  }
+ 438   3              }
+ 439   2              if(Nixie_Show_Mode == 2)
+ 440   2              {
+ 441   3                  memcpy(Volt_Weight_Show,Volt_Weight_Set,sizeof(Volt_Weight_Set));
+ 442   3              }
+ 443   2              break;
+ 444   2          
+ 445   2          case 5:     //次屏切换显示
+ 446   2              switch (Nixie_Show_Mode)
+ 447   2              {
+ 448   3                  case 0://数据显示
+ 449   3                      if(++Nixie_Show_viceMode > 3)
+ 450   3                      {
+ 451   4                          Nixie_Show_viceMode = 0;            
+ 452   4                      }
+ 453   3                      break;
+ 454   3                  case 1://参数界面
+ 455   3                  
+ 456   3                      if(++Nixie_Show_viceMode > 7)
+ 457   3                      {
+ 458   4                          Nixie_Show_viceMode = 0;            
+ 459   4                      }
+ 460   3                      break;
+ 461   3                  case 2://标定界面
+ 462   3                      if(++Nixie_Show_viceMode > 4)
+ 463   3                      {
+ 464   4                          Nixie_Show_viceMode = 0;            
+ 465   4                      }
+ 466   3                      break;
+ 467   3              }
+ 468   2              
+ 469   2      
+ 470   2              break;
+ 471   2      
+ 472   2          case 8:         //标定界面 加按钮
+ 473   2              if(Nixie_Show_Mode == 2)
+ 474   2              {
+ 475   3                  Volt_Weight_Show[Nixie_Show_viceMode] += 1;
+ 476   3                  if(Volt_Weight_Show[Nixie_Show_viceMode] >= 50)
+ 477   3                  {
+ 478   4                      Volt_Weight_Show[Nixie_Show_viceMode] = 50;
+ 479   4                  }
+ 480   3                  // if(Nixie_Show_viceMode < 4 && Nixie_Show_viceMode > 0)
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 9   
+
+ 481   3                  // {
+ 482   3                  //     if(Volt_Weight_Show[Nixie_Show_viceMode] < Volt_Weight_Show[Nixie_Show_viceMode+1]
+ 483   3                  //         && Volt_Weight_Show[Nixie_Show_viceMode] > Volt_Weight_Show[Nixie_Show_viceMode-1])
+ 484   3                  //         {
+ 485   3                  //             memcpy(Volt_Weight_Set,Volt_Weight_Show,5);
+ 486   3                  //         }
+ 487   3                  // }
+ 488   3                  // else if(Nixie_Show_viceMode == 4)
+ 489   3                  // {
+ 490   3                  //     if(Volt_Weight_Show[Nixie_Show_viceMode] <= 50)
+ 491   3                  //     {
+ 492   3                  //         memcpy(Volt_Weight_Set,Volt_Weight_Show,5);
+ 493   3                  //     }
+ 494   3                  // }
+ 495   3                  // else if(Nixie_Show_viceMode == 0)
+ 496   3                  // {
+ 497   3                  //     if(Volt_Weight_Show[Nixie_Show_viceMode] < Volt_Weight_Show[Nixie_Show_viceMode+1])
+ 498   3                  //     {
+ 499   3                  //         memcpy(Volt_Weight_Set,Volt_Weight_Show,5);
+ 500   3                  //     }
+ 501   3                  // }
+ 502   3              }
+ 503   2              
+ 504   2      
+ 505   2              break;
+ 506   2      
+ 507   2          case 9:         //标定界面 减按钮
+ 508   2              if(Nixie_Show_Mode == 2)
+ 509   2              {
+ 510   3                  Volt_Weight_Show[Nixie_Show_viceMode] -= 1;
+ 511   3                  if(Volt_Weight_Show[Nixie_Show_viceMode] > 60000)
+ 512   3                  {
+ 513   4                      Volt_Weight_Show[Nixie_Show_viceMode] = 0;
+ 514   4                  }
+ 515   3                  // if(Nixie_Show_viceMode < 4 && Nixie_Show_viceMode > 0)
+ 516   3                  // {
+ 517   3                  //     if(Volt_Weight_Show[Nixie_Show_viceMode] < Volt_Weight_Show[Nixie_Show_viceMode+1]
+ 518   3                  //         && Volt_Weight_Show[Nixie_Show_viceMode] > Volt_Weight_Show[Nixie_Show_viceMode-1])
+ 519   3                  //         {
+ 520   3                  //             memcpy(Volt_Weight_Set,Volt_Weight_Show,5);
+ 521   3                  //         }
+ 522   3                  // }
+ 523   3                  // else if(Nixie_Show_viceMode == 4)
+ 524   3                  // {
+ 525   3                  //     if(Volt_Weight_Show[Nixie_Show_viceMode] <= 50)
+ 526   3                  //     {
+ 527   3                  //         memcpy(Volt_Weight_Set,Volt_Weight_Show,5);
+ 528   3                  //     }
+ 529   3                  // }
+ 530   3                  // else if(Nixie_Show_viceMode == 0)
+ 531   3                  // {
+ 532   3                  //     if(Volt_Weight_Show[Nixie_Show_viceMode] < Volt_Weight_Show[Nixie_Show_viceMode+1] && V
+             -olt_Weight_Show[Nixie_Show_viceMode] >= 0)
+ 533   3                  //     {
+ 534   3                  //         memcpy(Volt_Weight_Set,Volt_Weight_Show,5);
+ 535   3                  //     }
+ 536   3                  // }
+ 537   3              }
+ 538   2              break;
+ 539   2          }
+ 540   1      
+ 541   1      
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 10  
+
+ 542   1      }
+ 543          
+ 544          void Nixie_PutO()         //数码管显示处理
+ 545          {
+ 546   1          if (Nixie_Slow_Down <= 500) return;
+ 547   1          Nixie_Slow_Down = 0;
+ 548   1        
+ 549   1      
+ 550   1          //数据处理
+ 551   1          Read_Timer(Timer_Show);             //读取时间
+ 552   1      
+ 553   1          Tem_Read = rd_Temperature();        //读取温度
+ 554   1      
+ 555   1          //超声波处理
+ 556   1          Wave_Lenth = (unsigned int)((float)rd_Length_Time() / 1000.0f * (330 + 0.6f * Tem_Read) / 20 );       
+             - //读取超声波解析出的长度
+ 557   1          Volumn_Calc(Wave_Lenth,R_Set,L_W_H_Set,S_Type,&Volumn,&Remain_Volumn,&Water_d);
+ 558   1      
+ 559   1          if(Water_d > H_Set[0])      //500——水位超出范围
+ 560   1          {
+ 561   2              Error_Index = 1;
+ 562   2            if(Error_1 == 0)
+ 563   2            {
+ 564   3              printf("[500,%bu%bu%bu,%u.%u%u]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Water_d / 100 % 10,Wate
+             -r_d / 10 % 10,Water_d % 10 );
+ 565   3              Error_1 = 1;
+ 566   3            }
+ 567   2          }
+ 568   1          else if (Water_d < H_Set[1])     //501——水位超出范围
+ 569   1          {
+ 570   2              Error_Index = 2;
+ 571   2            if(Error_2 == 0)
+ 572   2            {
+ 573   3              printf("[501,%bu%bu%bu,%u.%u%u]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Water_d / 100 % 10,Wate
+             -r_d / 10 % 10,Water_d % 10 );
+ 574   3              Error_2 = 1;
+ 575   3            }
+ 576   2          }
+ 577   1          else                //正常
+ 578   1          {
+ 579   2              Error_Index = 0;
+ 580   2            Error_1 = 0;
+ 581   2            Error_2 = 0;
+ 582   2          }
+ 583   1      
+ 584   1          
+ 585   1      // 读取重量
+ 586   1      Weight = ad_Read(0x03);        //读取重量 
+ 587   1      Weight += (unsigned int)(((float)(0.04f * Tem_Read  * Tem_Read )) - (10 * Tem_Read) + 225); 
+ 588   1      Weight = ((Weight * 100 / 51.0 ) + 5) / 10;  //电压模拟重量    数值 高10倍         
+ 589   1      
+ 590   1      // 重量转换 - 使用线性插值
+ 591   1      
+ 592   1      if (Weight < Volt_Weight_Set[0]) {
+ 593   2          // 低于空载值，设为 0
+ 594   2          weight_result = 0;
+ 595   2      } else if (Weight >= Volt_Weight_Set[0] && Weight < Volt_Weight_Set[1]) {
+ 596   2          // 0~5吨
+ 597   2          if (Volt_Weight_Set[1] > Volt_Weight_Set[0]) {
+ 598   3              weight_result = (unsigned int)(50.0f * (Weight - Volt_Weight_Set[0]) / (Volt_Weight_Set[1] - Volt_
+             -Weight_Set[0]));
+ 599   3          } else {
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 11  
+
+ 600   3              weight_result = 0;
+ 601   3          }
+ 602   2      } else if (Weight >= Volt_Weight_Set[1] && Weight < Volt_Weight_Set[2]) {
+ 603   2          // 5~10吨
+ 604   2          if (Volt_Weight_Set[2] > Volt_Weight_Set[1]) {
+ 605   3              weight_result = 50 + (unsigned int)(50.0f * (Weight - Volt_Weight_Set[1]) / (Volt_Weight_Set[2] - 
+             -Volt_Weight_Set[1]));
+ 606   3          } else {
+ 607   3              weight_result = 50;
+ 608   3          }
+ 609   2      } else if (Weight >= Volt_Weight_Set[2] && Weight < Volt_Weight_Set[3]) {
+ 610   2          // 10~15吨
+ 611   2          if (Volt_Weight_Set[3] > Volt_Weight_Set[2]) {
+ 612   3              weight_result = 100 + (unsigned int)(50.0f * (Weight - Volt_Weight_Set[2]) / (Volt_Weight_Set[3] -
+             - Volt_Weight_Set[2]));
+ 613   3          } else {
+ 614   3              weight_result = 100;
+ 615   3          }
+ 616   2      } else if (Weight >= Volt_Weight_Set[3] && Weight < Volt_Weight_Set[4]) {
+ 617   2          // 15~20吨
+ 618   2          if (Volt_Weight_Set[4] > Volt_Weight_Set[3]) {
+ 619   3              weight_result = 150 + (unsigned int)(50.0f * (Weight - Volt_Weight_Set[3]) / (Volt_Weight_Set[4] -
+             - Volt_Weight_Set[3]));
+ 620   3          } else {
+ 621   3              weight_result = 150;
+ 622   3          }
+ 623   2      } else {
+ 624   2          // 超过20吨
+ 625   2          weight_result = 200;
+ 626   2      }
+ 627   1      
+ 628   1      // 确保结果在 0~20 范围内
+ 629   1      if (weight_result > 200) {
+ 630   2          weight_result = 200;
+ 631   2      } else if (weight_result < 0) {
+ 632   2          weight_result = 0;
+ 633   2      }
+ 634   1      
+ 635   1      Weight = weight_result;
+ 636   1          
+ 637   1          
+ 638   1          
+ 639   1          //显示处理
+ 640   1          switch (Nixie_Show_Mode)
+ 641   1          {
+ 642   2          case 0:     //数据
+ 643   2              switch (Nixie_Show_viceMode)
+ 644   2              {
+ 645   3                  case 0: //时间
+ 646   3                  {
+ 647   4                  Nixie_Clear();
+ 648   4                      Nixie_Show[0] = Timer_Show[0] / 10 % 10;
+ 649   4                      Nixie_Show[1] = Timer_Show[0] % 10;
+ 650   4      
+ 651   4                      Nixie_Show[3] = Timer_Show[1] / 10 % 10;
+ 652   4                      Nixie_Show[4] = Timer_Show[1] % 10;
+ 653   4      
+ 654   4                      Nixie_Show[6] = Timer_Show[2] / 10 % 10;
+ 655   4                      Nixie_Show[7] = Timer_Show[2] % 10;
+ 656   4      
+ 657   4                      Nixie_Show[2] = Nixie_Show[5] = 11;
+ 658   4      
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 12  
+
+ 659   4                      break;
+ 660   4                  }
+ 661   3                  case 1: //液位
+ 662   3                  {
+ 663   4                  Nixie_Clear();
+ 664   4                      if (Tem_Read < 0)
+ 665   4                      {
+ 666   5                          Tem_Read = -Tem_Read;
+ 667   5                          Nixie_Show[0] = 11;     //温度负数符号
+ 668   5                      }
+ 669   4                      
+ 670   4                      Nixie_Show[2] = (unsigned char)Tem_Read / 10 % 10;      //温度  单位：℃
+ 671   4                      Nixie_Show[3] = (unsigned char)Tem_Read % 10;
+ 672   4      
+ 673   4                      Nixie_Show[4] = 11;
+ 674   4      
+ 675   4                      if (S_Type == 0)        //球容器时
+ 676   4                      {
+ 677   5      
+ 678   5                          Nixie_Show[5] = (unsigned char)(2*R_Set - Wave_Lenth) / 100 % 10;     //水位长度  单位
+             -：cm
+ 679   5                          Nixie_Show[6] = (unsigned char)(2*R_Set - Wave_Lenth) / 10 % 10;
+ 680   5                          Nixie_Show[7] = (unsigned char)(2*R_Set - Wave_Lenth) % 10;   
+ 681   5      
+ 682   5                          Nixie_Point[5] = 1;
+ 683   5                      }
+ 684   4                      else 
+ 685   4                      {
+ 686   5                          Nixie_Show[5] = (unsigned char)(L_W_H_Set[3] - Wave_Lenth) / 100 % 10;     //水位长度 
+             - 单位：cm
+ 687   5                          Nixie_Show[6] = (unsigned char)(L_W_H_Set[3] - Wave_Lenth) / 10 % 10;
+ 688   5                          Nixie_Show[7] = (unsigned char)(L_W_H_Set[3] - Wave_Lenth)  % 10;   
+ 689   5      
+ 690   5                          Nixie_Point[5] = 1;
+ 691   5                      }
+ 692   4                      
+ 693   4                      break;
+ 694   4                  }
+ 695   3                  case 2: //体积
+ 696   3                  {
+ 697   4                  Nixie_Clear();
+ 698   4                      i = 0;
+ 699   4                      Nixie_Show[0] = Remain_Volumn / 100 % 10;      //剩余体积比
+ 700   4                      Nixie_Show[1] = Remain_Volumn / 10 % 10;
+ 701   4                      Nixie_Show[2] = Remain_Volumn  % 10;
+ 702   4      
+ 703   4                      while(Nixie_Show[i] == 0)
+ 704   4                      {
+ 705   5                          Nixie_Show[i] = 10;     //熄灭
+ 706   5                          i++;
+ 707   5                          if(i >= 2)
+ 708   5                          {
+ 709   6                              break;
+ 710   6                          }
+ 711   5                      }
+ 712   4      
+ 713   4                      Nixie_Show[3] = 11;
+ 714   4      
+ 715   4                      Nixie_Show[4] = Volumn / 1000 % 10;        //液体体积
+ 716   4                      Nixie_Show[5] = Volumn / 100 % 10;     
+ 717   4                      Nixie_Show[6] = Volumn / 10 % 10;
+ 718   4                      Nixie_Show[7] = Volumn % 10;   
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 13  
+
+ 719   4      
+ 720   4                      Nixie_Point[6] = 1;
+ 721   4      
+ 722   4                      i = 4;
+ 723   4                      while(Nixie_Show[i] == 0)
+ 724   4                      {
+ 725   5                          Nixie_Show[i] = 10;     //熄灭
+ 726   5                          i++;
+ 727   5                          if(i >= 6)
+ 728   5                          {
+ 729   6                              break;
+ 730   6                          }
+ 731   5                      }
+ 732   4      
+ 733   4                      break;
+ 734   4                  }
+ 735   3                  case 3: //重量
+ 736   3                  {
+ 737   4                  Nixie_Clear();
+ 738   4                      if (Tem_Read < 0)
+ 739   4                      {
+ 740   5                          Tem_Read = -Tem_Read;
+ 741   5                          Nixie_Show[0] = 11;         //重量负数符号
+ 742   5                      }
+ 743   4                      
+ 744   4                      Nixie_Show[1] = (unsigned char)Tem_Read / 10 % 10;      //温度  单位：℃
+ 745   4                      Nixie_Show[2] = (unsigned char)Tem_Read % 10;
+ 746   4      
+ 747   4                      Nixie_Show[3] = 11;
+ 748   4      
+ 749   4                      i = 4;
+ 750   4                      Nixie_Show[4] = Weight / 1000 % 10;        //重量
+ 751   4                      Nixie_Show[5] = Weight / 100 % 10;     
+ 752   4                      Nixie_Show[6] = Weight / 10 % 10;
+ 753   4                      Nixie_Show[7] = Weight % 10;   
+ 754   4                      Nixie_Point[6] = 1;                         //重量小数点
+ 755   4      
+ 756   4                      
+ 757   4                      while (Nixie_Show[i] == 0)
+ 758   4                      {
+ 759   5                          Nixie_Show[i] = 10;     //熄灭
+ 760   5                          i++;
+ 761   5                          if(i >= 6)
+ 762   5                          {
+ 763   6                              break;
+ 764   6                          }
+ 765   5                      }
+ 766   4                      
+ 767   4                      break;
+ 768   4                  }
+ 769   3      
+ 770   3              }
+ 771   2      
+ 772   2              break;
+ 773   2      
+ 774   2          case 1:     //参数
+ 775   2          Nixie_Clear();
+ 776   2              Nixie_Show[0] = 12;             //P
+ 777   2              Nixie_Show[1] = Nixie_Show_viceMode + 1;        //参数编号
+ 778   2              Nixie_Show[2] = 11;             //-
+ 779   2              i = 4;
+ 780   2              switch (Nixie_Show_viceMode)
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 14  
+
+ 781   2              {
+ 782   3              case 0:         //液面上限
+ 783   3                  //L_W_H_Set[0] /= 10;        //只保留1位小数
+ 784   3                  Nixie_Show[4] = H_Set[0] / 10000 % 10;
+ 785   3                  Nixie_Show[5] = H_Set[0] / 1000 % 10; 
+ 786   3                  Nixie_Show[6] = H_Set[0] / 100 % 10;
+ 787   3                  Nixie_Show[7] = H_Set[0] / 10 % 10;
+ 788   3                  
+ 789   3                  
+ 790   3                  Nixie_Point[6] = 1;
+ 791   3                  break;
+ 792   3              case 1:         //液面下限
+ 793   3                  //L_W_H_Set[1] /= 10;        //只保留1位小数
+ 794   3                  Nixie_Show[4] = H_Set[1] / 10000 % 10;
+ 795   3                  Nixie_Show[5] = H_Set[1] / 1000 % 10; 
+ 796   3                  Nixie_Show[6] = H_Set[1] / 100 % 10;
+ 797   3                  Nixie_Show[7] = H_Set[1] / 10 % 10;
+ 798   3                  
+ 799   3                  Nixie_Point[6] = 1;
+ 800   3                  break;
+ 801   3              case 2:         //频率
+ 802   3                  i = 3;
+ 803   3                  //F_Set /= 10;        //只保留1位小数
+ 804   3                  Nixie_Show[3] = F_Set / 10000 % 10;
+ 805   3                  Nixie_Show[4] = F_Set / 1000 % 10; 
+ 806   3                  Nixie_Show[5] = F_Set / 100 % 10;
+ 807   3                  Nixie_Show[6] = F_Set / 10 % 10;
+ 808   3                  Nixie_Show[7] = F_Set % 10; 
+ 809   3                  
+ 810   3                  break;
+ 811   3              case 3:         //容器类型
+ 812   3      
+ 813   3                  Nixie_Show[7] = S_Type % 10; 
+ 814   3      
+ 815   3                  break;
+ 816   3              case 4:         //半径
+ 817   3                  //R_Set /= 10;        //只保留1位小数
+ 818   3                  Nixie_Show[4] = R_Set / 10000 % 10;
+ 819   3                  Nixie_Show[5] = R_Set / 1000 % 10; 
+ 820   3                  Nixie_Show[6] = R_Set / 100 % 10;
+ 821   3                  Nixie_Show[7] = R_Set / 10 % 10;
+ 822   3       
+ 823   3                  
+ 824   3                  Nixie_Point[6] = 1;
+ 825   3                  break;
+ 826   3              case 5:         //长
+ 827   3                  //L_W_H_Set[0] /= 10;        //只保留1位小数
+ 828   3                  Nixie_Show[4] = L_W_H_Set[0] / 10000 % 10;
+ 829   3                  Nixie_Show[5] = L_W_H_Set[0] / 1000 % 10; 
+ 830   3                  Nixie_Show[6] = L_W_H_Set[0] / 100 % 10;
+ 831   3                  Nixie_Show[7] = L_W_H_Set[0] / 10 % 10;
+ 832   3                  
+ 833   3                  Nixie_Point[6] = 1;
+ 834   3                  break;
+ 835   3              case 6:         //宽
+ 836   3                  //L_W_H_Set[1] /= 10;        //只保留1位小数
+ 837   3                  Nixie_Show[4] = L_W_H_Set[1] / 10000 % 10;
+ 838   3                  Nixie_Show[5] = L_W_H_Set[1] / 1000 % 10; 
+ 839   3                  Nixie_Show[6] = L_W_H_Set[1] / 100 % 10;
+ 840   3                  Nixie_Show[7] = L_W_H_Set[1] / 10 % 10;
+ 841   3                  
+ 842   3                  Nixie_Point[6] = 1;
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 15  
+
+ 843   3                  break;
+ 844   3              case 7:         //高
+ 845   3                  //L_W_H_Set[2] /= 10;        //只保留1位小数
+ 846   3                  Nixie_Show[4] = L_W_H_Set[2] / 10000 % 10;
+ 847   3                  Nixie_Show[5] = L_W_H_Set[2] / 1000 % 10; 
+ 848   3                  Nixie_Show[6] = L_W_H_Set[2] / 100 % 10;
+ 849   3                  Nixie_Show[7] = L_W_H_Set[2] / 10 % 10;
+ 850   3                  
+ 851   3                  Nixie_Point[6] = 1;
+ 852   3                  break;
+ 853   3              }
+ 854   2              while (Nixie_Show[i] == 0)
+ 855   2              {
+ 856   3                  Nixie_Show[i] = 10;     //熄灭
+ 857   3                  i++;
+ 858   3                  if(Nixie_Show_viceMode == 2 || Nixie_Show_viceMode == 3)
+ 859   3                  {   
+ 860   4                      if(i >= 7)
+ 861   4                      {
+ 862   5                          break;
+ 863   5                      }
+ 864   4                  }
+ 865   3                  if(i >= 6)
+ 866   3                  {
+ 867   4                      break;
+ 868   4                  }
+ 869   3              }
+ 870   2              
+ 871   2      
+ 872   2              break;
+ 873   2          case 2:     //标定
+ 874   2          Nixie_Clear();
+ 875   2              Nixie_Show[0] = 13;             //E
+ 876   2              if(Nixie_Show_viceMode == 0)        //空载
+ 877   2              {
+ 878   3                  Nixie_Show[1] = 0;             
+ 879   3                  Nixie_Show[2] = 0;   
+ 880   3                  
+ 881   3                  Nixie_Show[6] = Volt_Weight_Show[0] / 10 % 10;
+ 882   3                  Nixie_Show[7] = Volt_Weight_Show[0] % 10;
+ 883   3                  Nixie_Point[6] = 1;
+ 884   3              }
+ 885   2              else if(Nixie_Show_viceMode == 1)     //5吨
+ 886   2              {
+ 887   3                  Nixie_Show[1] = 0;             
+ 888   3                  Nixie_Show[2] = 5;   
+ 889   3                  
+ 890   3                  Nixie_Show[6] = Volt_Weight_Show[1] / 10 % 10;
+ 891   3                  Nixie_Show[7] = Volt_Weight_Show[1] % 10;
+ 892   3                  Nixie_Point[6] = 1;
+ 893   3              }
+ 894   2              else if(Nixie_Show_viceMode == 2)     //10吨
+ 895   2              {
+ 896   3                  Nixie_Show[1] = 1;             
+ 897   3                  Nixie_Show[2] = 0;   
+ 898   3                  
+ 899   3                  Nixie_Show[6] = Volt_Weight_Show[2] / 10 % 10;
+ 900   3                  Nixie_Show[7] = Volt_Weight_Show[2] % 10;
+ 901   3                  Nixie_Point[6] = 1;
+ 902   3              }
+ 903   2              else if(Nixie_Show_viceMode == 3)     //15吨
+ 904   2              {
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 16  
+
+ 905   3                  Nixie_Show[1] = 1;             
+ 906   3                  Nixie_Show[2] = 5;   
+ 907   3                  
+ 908   3                  Nixie_Show[6] = Volt_Weight_Show[3] / 10 % 10;
+ 909   3                  Nixie_Show[7] = Volt_Weight_Show[3] % 10;
+ 910   3                  Nixie_Point[6] = 1;
+ 911   3              }
+ 912   2              else if(Nixie_Show_viceMode == 4)     //20吨
+ 913   2              {
+ 914   3                  Nixie_Show[1] = 2;             
+ 915   3                  Nixie_Show[2] = 0;   
+ 916   3                  
+ 917   3                  Nixie_Show[6] = Volt_Weight_Show[4] / 10 % 10;
+ 918   3                  Nixie_Show[7] = Volt_Weight_Show[4] % 10;
+ 919   3                  Nixie_Point[6] = 1;
+ 920   3              }
+ 921   2      
+ 922   2              break;
+ 923   2      
+ 924   2          
+ 925   2          }
+ 926   1          
+ 927   1      
+ 928   1      }
+ 929          
+ 930          void other_PutO()         //其他处理
+ 931          {
+ 932   1        if(Nixie_Show_Mode == 0 && Nixie_Show_viceMode == 0)  //时间显示 led 1 0 0 0
+ 933   1        {
+ 934   2          Led_Enable[0] = 1;
+ 935   2          Led_Enable[1] = 0;
+ 936   2          Led_Enable[2] = 0;
+ 937   2          Led_Enable[3] = 0;
+ 938   2        }
+ 939   1        else if(Nixie_Show_Mode == 0 && Nixie_Show_viceMode == 1)   //液面显示 0 1 0 0
+ 940   1        {
+ 941   2          Led_Enable[0] = 0;
+ 942   2          Led_Enable[1] = 1;
+ 943   2          Led_Enable[2] = 0;
+ 944   2          Led_Enable[3] = 0;
+ 945   2        }
+ 946   1        else if(Nixie_Show_Mode == 0 && Nixie_Show_viceMode == 2)   //体积显示 0 0 1 0
+ 947   1        {
+ 948   2          Led_Enable[0] = 0;
+ 949   2          Led_Enable[1] = 0;
+ 950   2          Led_Enable[2] = 1;
+ 951   2          Led_Enable[3] = 0;
+ 952   2        }
+ 953   1        else if(Nixie_Show_Mode == 0 && Nixie_Show_viceMode == 3)   //体积显示 0 0 0 1
+ 954   1        {
+ 955   2          Led_Enable[0] = 0;
+ 956   2          Led_Enable[1] = 0;
+ 957   2          Led_Enable[2] = 0;
+ 958   2          Led_Enable[3] = 1;
+ 959   2        }
+ 960   1          else 
+ 961   1          {
+ 962   2             Led_Enable[0] = 0;
+ 963   2          Led_Enable[1] = 0;
+ 964   2          Led_Enable[2] = 0;
+ 965   2          Led_Enable[3] = 0; 
+ 966   2          }
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 17  
+
+ 967   1        
+ 968   1        if(Error_1 == 1 || Error_2 == 1)    //液面异常指示灯
+ 969   1        {
+ 970   2          Led_Enable[4] = 1;
+ 971   2        }
+ 972   1        else
+ 973   1        {
+ 974   2          Led_Enable[4] = 0;
+ 975   2        }
+ 976   1        
+ 977   1        if(Error_3 == 1)    //频率数值异常指示灯
+ 978   1        {
+ 979   2          Led_Enable[5] = 1;
+ 980   2        }
+ 981   1        else
+ 982   1        {
+ 983   2          Led_Enable[5] = 0;
+ 984   2        }
+ 985   1        
+ 986   1        if(Error_4 == 1)    //频率趋势异常
+ 987   1        {
+ 988   2          Led_Enable[6] = Fight_Led_7;
+ 989   2        }
+ 990   1        else 
+ 991   1        {
+ 992   2          Led_Enable[6] = 0;
+ 993   2        }
+ 994   1      
+ 995   1        if(Error_5 == 1)    //频率剧烈变换异常
+ 996   1        {
+ 997   2          Led_8_Start_Index = 1;
+ 998   2          Led_Enable[7] = ((Led_8_Start_Index) ? (1 * Fight_Led_8) : 0);
+ 999   2          
+1000   2        }
+1001   1          else 
+1002   1          {
+1003   2              Led_Enable[7] = 0;
+1004   2          }
+1005   1        
+1006   1        if(Error_1 || Error_2 || Error_3 || Error_4 || Error_5)     //无异常
+1007   1        {
+1008   2          Box_On();
+1009   2        }
+1010   1        else 
+1011   1        {
+1012   2          Box_Off();
+1013   2        }
+1014   1      
+1015   1      }
+1016          
+1017          //串口处理
+1018          void Uart_PutO()         //串口处理
+1019          {
+1020   1          unsigned char Uart_pos = 0;
+1021   1              error = 0;
+1022   1              ok = 0;
+1023   1          // Uart_Id = NULL;
+1024   1          // id_value = NULL;
+1025   1          if(Uart_Rx_Time >= 10) 
+1026   1          {
+1027   2              Uart_Rx = 0;
+1028   2              Uart_Rx_Time = 0;
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 18  
+
+1029   2      
+1030   2              //串口解析(超时解析)    
+1031   2              /*好处：一次解析完单次发送数据，不用考虑数据是否完整 */
+1032   2              while(Uart_pos < Uart_Rx_Index)
+1033   2              {
+1034   3                  Uart_pos = Uart_Get_IdAndValue(Uart_pos,Uart_Id,id_value);
+1035   3      
+1036   3                  if(Uart_pos == 0xff)
+1037   3                  {
+1038   4                      error = 1;
+1039   4                      break;
+1040   4                  }
+1041   3      
+1042   3                  Uart_Solve_temp(Uart_Id,id_value,&error,&ok);
+1043   3      
+1044   3                  Uart_pos++;         //跳过')'
+1045   3      
+1046   3              }
+1047   2      
+1048   2              if(error && ok)
+1049   2              {
+1050   3                  printf("WARN\r\n");
+1051   3              }
+1052   2              else if(error)
+1053   2              {
+1054   3                  printf("ERROR\r\n");
+1055   3              }
+1056   2              else if (ok)
+1057   2              {
+1058   3                  printf("OK\r\n");
+1059   3              }
+1060   2      
+1061   2      
+1062   2              memset(Uart_Recv,0,Uart_Rx_Index);
+1063   2              Uart_Rx_Index = 0;
+1064   2      
+1065   2          }
+1066   1      
+1067   1          // 频率超值
+1068   1              if(freq > F_Set)
+1069   1              {
+1070   2                  Error_Index = 3;
+1071   2                  if(Error_3 == 0)
+1072   2                  {
+1073   3                      printf("[503,%bu%bu%bu,%u]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],freq );
+1074   3                      Error_3 = 1;
+1075   3                  }
+1076   2              }
+1077   1              else
+1078   1              {
+1079   2                  Error_Index = 0;
+1080   2                  Error_3 = 0;
+1081   2              }
+1082   1       
+1083   1              // 频率变化过大（趋势异常）
+1084   1              if (Freq_Flag_Old == 0)
+1085   1              {
+1086   2                  Freq_Flag_Old = 1;
+1087   2                  // 计算实际频率差（考虑溢出）
+1088   2                  freq_diff = ((freq - freq_old) > 60000) ? freq_old - freq : freq - freq_old;
+1089   2                  
+1090   2                  if(freq_diff > 1000)
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 19  
+
+1091   2                  {
+1092   3                      Error_Index = 5;
+1093   3                      Freq_Big_Change = 1;
+1094   3                      if(Error_5 == 0)
+1095   3                      {
+1096   4                          printf("[504,%bu%bu%bu,%u]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],freq_diff );
+1097   4                          Error_5 = 1;
+1098   4                      }
+1099   3                  }
+1100   2                  else
+1101   2                  {
+1102   3                      Freq_Big_Change = 0;
+1103   3                      Error_Index = 0;
+1104   3                      Error_5 = 0;
+1105   3                  }
+1106   2              }
+1107   1              else if (Freq_Flag_Old == 1)
+1108   1              {
+1109   2                  Freq_Flag_Old = 0;
+1110   2              }
+1111   1       
+1112   1              // 频率连续变化
+1113   1              if(freq > freq_old)     //上升变化
+1114   1              {
+1115   2                  Freq_5T++;
+1116   2                  Freq_5D = 0;
+1117   2                  Freq_Flag = 1;        
+1118   2                  if (Freq_5T >= 5)
+1119   2                  {
+1120   3                      Freq_5T = 0;
+1121   3                      Error_Index = 4;
+1122   3                      if(Error_4 == 0)
+1123   3                      {
+1124   4                          printf("[503,%bu%bu%bu,%bu]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Freq_Flag )
+             -;
+1125   4                          Error_4 = 1;
+1126   4                      }
+1127   3                  }
+1128   2              }
+1129   1              else if (freq < freq_old)       //下降变化          
+1130   1              {
+1131   2                  Freq_5D++;
+1132   2                  Freq_5T = 0;
+1133   2                  Freq_Flag = 0;        
+1134   2                  if (Freq_5D >= 5)
+1135   2                  {
+1136   3                      Freq_5D = 0;
+1137   3                      Error_Index = 4;
+1138   3                      if(Error_4 == 0)
+1139   3                      {
+1140   4                          printf("[503,%bu%bu%bu,%bu]\r\n",Timer_Show[0],Timer_Show[1],Timer_Show[2],Freq_Flag )
+             -;
+1141   4                          Error_4 = 1;
+1142   4                      }
+1143   3                  }
+1144   2              }
+1145   1              else        //不变化
+1146   1              {
+1147   2                  Freq_5T = 0;
+1148   2                  Freq_5D = 0;
+1149   2                  Error_Index = 0;
+1150   2                  Error_4 = 0;
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 20  
+
+1151   2              }
+1152   1              // 保存旧频率值
+1153   1              freq_old = freq;
+1154   1      //        
+1155   1          
+1156   1      
+1157   1        
+1158   1      }
+1159          
+1160          
+1161          /*======================================================================================================*/
+1162          //定时器1处理区
+1163          void Timer1Init(void)   //1毫秒@12.000MHz
+1164          {
+1165   1        AUXR &= 0xBF;   //定时器时钟12T模式
+1166   1        TMOD &= 0x0F;   //设置定时器模式
+1167   1        TL1 = 0x18;   //设置定时初值
+1168   1        TH1 = 0xFC;   //设置定时初值
+1169   1        TF1 = 0;    //清除TF1标志
+1170   1        TR1 = 1;    //定时器1开始计时
+1171   1      
+1172   1          ET1 = 1;
+1173   1          EA = 1;
+1174   1      }
+1175          void Timer1Service() interrupt 3
+1176          {
+1177   1          Key_Slow_Down++;
+1178   1          Nixie_Slow_Down++;
+1179   1          if(++Nixie_Led_Pos >= 8) Nixie_Led_Pos = 0;
+1180   1          Nixie_Disp(Nixie_Led_Pos,Nixie_Show[Nixie_Led_Pos],Nixie_Point[Nixie_Led_Pos]);
+1181   1          Led_Disp(Nixie_Led_Pos,Led_Enable[Nixie_Led_Pos]);
+1182   1          if(Uart_Rx == 1) Uart_Rx_Time++;
+1183   1      
+1184   1          if(++NE555_1000MS >= 1000)      //计算频率
+1185   1          {
+1186   2              TR0 = 0;
+1187   2              NE555_1000MS = 0;
+1188   2              freq = TH0 << 8 | TL0;
+1189   2              TH0 = 0x00;
+1190   2              TL0 = 0x00; 
+1191   2              TR0 = 1;
+1192   2      
+1193   2       
+1194   2              
+1195   2      
+1196   2          }
+1197   1          
+1198   1          if(++Time_100Ms >= 100)
+1199   1          {
+1200   2                  Time_100Ms = 0;
+1201   2            Fight_Led_7 ^= 1;
+1202   2          }
+1203   1          
+1204   1          
+1205   1          if(Led_8_Start_Index == 1)
+1206   1          {
+1207   2            if(++Time_200Ms >= 200)
+1208   2            {
+1209   3              Time_200Ms = 0;
+1210   3              Fight_Led_8 ^= 1;
+1211   3            }
+1212   2            if(++Time_3S >= 3000)
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 21  
+
+1213   2            {
+1214   3              Led_8_Start_Index = 0;
+1215   3              Time_200Ms = 0;
+1216   3                      Time_3S = 0;
+1217   3            }
+1218   2            
+1219   2          }
+1220   1      
+1221   1      }
+1222          
+1223          void Uart_Service() interrupt 4
+1224          {
+1225   1          if(RI == 1)     //按字符接收
+1226   1          {
+1227   2              Uart_Rx = 1;                //接收标记
+1228   2              Uart_Rx_Time = 0;           //超时初始
+1229   2                  Uart_Recv[Uart_Rx_Index] = SBUF;
+1230   2                  Uart_Rx_Index++;
+1231   2            Uart_Recv[Uart_Rx_Index] = '\0'; // 添加结束符
+1232   2                  
+1233   2              RI = 0;
+1234   2              if(Uart_Rx_Index >= 19)
+1235   2              {
+1236   3                  memset(Uart_Recv,0,Uart_Rx_Index);
+1237   3                  Uart_Rx_Index = 0;
+1238   3      
+1239   3              }
+1240   2          }
+1241   1      }
+1242          
+1243          //NE555处理区
+1244          void Timer0Init(void)   //0微秒@12.000MHz
+1245          {
+1246   1        AUXR &= 0x7F;   //定时器时钟12T模式
+1247   1        TMOD &= 0xF0;   //设置定时器模式
+1248   1      
+1249   1          TMOD |= 0x05;   //设置定时器模式 为计数模式并且为16位不重装载
+1250   1      
+1251   1        TL0 = 0x00;   //设置定时初值
+1252   1        TH0 = 0x00;   //设置定时初值
+1253   1        TF0 = 0;    //清除TF0标志
+1254   1        TR0 = 1;    //定时器0开始计时
+1255   1      }
+1256          
+1257          
+1258          
+1259          /*======================================================================================================*/
+1260          //主函数
+1261          void main()
+1262          {
+1263   1          InitSys();
+1264   1          Timer1Init();
+1265   1        Timer0Init();
+1266   1          rd_Temperature();
+1267   1          Set_Timer(Timer_Show);
+1268   1          UartInit();
+1269   1      
+1270   1          while (1)
+1271   1          {
+1272   2              Key_PutO();
+1273   2              Nixie_PutO();
+1274   2              other_PutO();
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 22  
+
+1275   2              Uart_PutO();
+1276   2              //Error_Report();
+1277   2          }
+1278   1          
+1279   1      }
+1280          
+1281          //提取标识      pos缓存值，方便递归使用
+1282          unsigned char Uart_Get_IdAndValue(unsigned char pos,unsigned char *Uart_Id,unsigned char *id_value)
+1283          {
+1284   1          i = 0;
+1285   1          while(pos < Uart_Rx_Index && Uart_Recv[pos] != '(')
+1286   1              pos++;
+1287   1      
+1288   1          if(pos >= Uart_Rx_Index) return 0xff;       //未找到
+1289   1      
+1290   1          pos++;      //跳过'('
+1291   1      
+1292   1          //提取标识ID
+1293   1          while(pos < Uart_Rx_Index && Uart_Recv[pos] != ',' && Uart_Recv[pos] != ':')
+1294   1          {
+1295   2              Uart_Id[i++] = Uart_Recv[pos];
+1296   2              pos++;
+1297   2              
+1298   2          }
+1299   1              Uart_Id[i] = '\0';  
+1300   1              pos++;      //跳过','
+1301   1      
+1302   1      
+1303   1              //提取数值
+1304   1              i = 0;      //重新计数，记录数值
+1305   1              while(pos < Uart_Rx_Index && Uart_Recv[pos] != ')')
+1306   1              {
+1307   2                  id_value[i++] = Uart_Recv[pos];
+1308   2                  pos++;
+1309   2              }
+1310   1              id_value[i] = '\0';
+1311   1              //pos++;      //跳过')'
+1312   1      
+1313   1              return pos;         //返回下一个位置——')'的位置
+1314   1      }
+1315          
+1316          
+1317          void Volumn_Calc(unsigned int Water_Lenth,unsigned int R_Set,unsigned int *L_W_H_Set,unsigned int S_Type,u
+             -nsigned int *Volumn,unsigned char *Remain_Volumn,unsigned int *Water_d)
+1318          {
+1319   1        unsigned int Sum_Volumn = 0;   
+1320   1        *Water_d = 0;
+1321   1           
+1322   1        switch(S_Type)
+1323   1        {
+1324   2          case 0:     //球
+1325   2                  *Water_d = (2* R_Set - Water_Lenth);      //液面高度
+1326   2                  if (*Water_d > 60000)
+1327   2                  {
+1328   3                      *Water_d = 0;
+1329   3                  }
+1330   2                  
+1331   2                  Sum_Volumn = (unsigned int)(4 / 3 * 3.14f * R_Set/10 * R_Set/10 * R_Set/10 / 100) ;
+1332   2            *Volumn = (unsigned int)(3.14f * *Water_d/10 * *Water_d/10 * (R_Set/10- (*Water_d / 30)) / 100) ;      
+             -           //Π * d^2 * (R - d/3)
+1333   2                  *Remain_Volumn = (unsigned char)( Sum_Volumn / 100.0f * *Volumn);         //剩余体积比
+1334   2            break;
+C51 COMPILER V9.56.0.0   MAIN                                                              03/23/2026 17:39:38 PAGE 23  
+
+1335   2              case 1:     //圆柱体
+1336   2                  *Water_d = (L_W_H_Set[2] - Water_Lenth);      //液面高度
+1337   2                  Sum_Volumn = (unsigned int)(3.14f * R_Set/10 * R_Set/10 * (L_W_H_Set[2] /10) / 100);
+1338   2                  if(*Water_d < 60000 || *Water_d == 0)
+1339   2                  {
+1340   3                      *Volumn = (unsigned int)(3.14f * R_Set/10 * R_Set/10 * *Water_d/10 / 100);
+1341   3                      *Remain_Volumn = (unsigned char)( Sum_Volumn / 100.0f * *Volumn );         //剩余体积比
+1342   3                  }
+1343   2                  else{
+1344   3                      *Water_d = 0;
+1345   3                      *Volumn = 0;
+1346   3                      *Remain_Volumn = 100;
+1347   3                  }
+1348   2                  
+1349   2                  break;
+1350   2              case 2:     //立方体
+1351   2                  *Water_d = (L_W_H_Set[2] - Water_Lenth);      //液面高度
+1352   2                  Sum_Volumn = L_W_H_Set[0]/10 * L_W_H_Set[1]/10 * L_W_H_Set[2] /10 / 100;
+1353   2                  if(*Water_d < 60000 || *Water_d == 0)
+1354   2                  {
+1355   3                      *Volumn = L_W_H_Set[0]/10 * L_W_H_Set[1]/10 * *Water_d/10 / 100;
+1356   3                      *Remain_Volumn = (unsigned char)( ((Sum_Volumn -*Volumn) * 100.0f) / (Sum_Volumn * 100.0f)
+             - * 100);         //剩余体积比
+1357   3                  }
+1358   2                  else 
+1359   2                  {
+1360   3                      *Water_d = 0;
+1361   3                      *Volumn = 0;
+1362   3                      *Remain_Volumn = 100;
+1363   3                  }
+1364   2                  
+1365   2                  break;
+1366   2          
+1367   2        }
+1368   1         }
+1369          
+1370          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   8345    ----
+   CONSTANT SIZE    =    292    ----
+   XDATA SIZE       =     54    ----
+   PDATA SIZE       =     75    ----
+   DATA SIZE        =     24      55
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =     13    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

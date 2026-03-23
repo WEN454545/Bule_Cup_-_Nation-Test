@@ -1,0 +1,45 @@
+C51 COMPILER V9.56.0.0   NIXIE                                                             03/23/2026 17:39:38 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE NIXIE
+OBJECT MODULE PLACED IN .\Objects\Nixie.obj
+COMPILER INVOKED BY: D:\programme\keil_c51v956\C51\BIN\C51.EXE ..\Driver\Nixie.c OPTIMIZE(8,SPEED) BROWSE INCDIR(..\Driv
+                    -er) DEBUG OBJECTEXTEND PRINT(.\Listings\Nixie.lst) TABS(2) OBJECT(.\Objects\Nixie.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include "Nixie.h"
+   3          #include "HC138.h"
+   4          
+   5          unsigned char code Nixie_Num[] = {0xc0,0xf9,0xa4,0xB0,0x99,0x92,0x82,0xf8,0x80,0x90,0xff,0xbf,0x8c,0x86};
+   6                                                                                                  // -   P    E
+   7          void Nixie_Disp(unsigned char pos,unsigned char dat,unsigned char point)
+   8          {
+   9   1          P0 = 0x00;
+  10   1          HC138_Select(7);    //ฯ๛าþ
+  11   1      
+  12   1          P0 = (0x01<<pos);
+  13   1          HC138_Select(6);    //ฮปัก
+  14   1      
+  15   1          P0 = Nixie_Num[dat];
+  16   1          if (point)
+  17   1              P0 &= 0x7f;
+  18   1          HC138_Select(7);
+  19   1          
+  20   1      }
+  21          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     54    ----
+   CONSTANT SIZE    =     14    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       3
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

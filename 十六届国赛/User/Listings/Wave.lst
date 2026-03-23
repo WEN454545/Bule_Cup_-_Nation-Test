@@ -1,0 +1,80 @@
+C51 COMPILER V9.56.0.0   WAVE                                                              03/23/2026 17:39:39 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE WAVE
+OBJECT MODULE PLACED IN .\Objects\Wave.obj
+COMPILER INVOKED BY: D:\programme\keil_c51v956\C51\BIN\C51.EXE ..\Driver\Wave.c OPTIMIZE(8,SPEED) BROWSE INCDIR(..\Drive
+                    -r) DEBUG OBJECTEXTEND PRINT(.\Listings\Wave.lst) TABS(2) OBJECT(.\Objects\Wave.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include "Wave.h"
+   3          #include "intrins.h"
+   4          
+   5          sbit Tx = P1^0;
+   6          sbit Rx = P1^1;
+   7          
+   8          
+   9          void Delay12us()    //@12.000MHz
+  10          {
+  11   1        unsigned char i;
+  12   1      
+  13   1        _nop_();
+  14   1        _nop_();
+  15   1        i = 38;
+  16   1        while (--i);
+  17   1      }
+  18          
+  19          void Wave_Init()
+  20          {
+  21   1          unsigned char i = 0;
+  22   1          for (i = 0; i < 8; i++)
+  23   1          {
+  24   2              Tx = 1;
+  25   2              Delay12us();
+  26   2              Tx = 0;
+  27   2              Delay12us();
+  28   2          }
+  29   1          
+  30   1      }
+  31          
+  32          unsigned int rd_Length_Time()
+  33          {
+  34   1          unsigned int temp = 0;
+  35   1          CMOD = 0x00;
+  36   1          CH = CL = 0;
+  37   1          Wave_Init();
+  38   1          CR = 1;
+  39   1          while ((Rx == 1) && (CF == 0));
+  40   1          CR = 0;
+  41   1          
+  42   1          if (CF == 0)
+  43   1          {
+  44   2              temp = CH << 8 | CL;
+  45   2              return temp ;
+  46   2          }
+  47   1          else 
+  48   1          {
+  49   2              CF = 0;
+  50   2              return 0;
+  51   2          }
+  52   1         
+  53   1      }
+  54          
+C51 COMPILER V9.56.0.0   WAVE                                                              03/23/2026 17:39:39 PAGE 2   
+
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     66    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
